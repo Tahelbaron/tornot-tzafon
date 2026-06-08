@@ -213,16 +213,28 @@ export default function ManagerApp() {
   };
  
   const generate = () => {
-    const active = getActiveShiftsByDay(year, month);
-    setMergedActive(active);
-    // seed שונה בכל הרצה — מבטיח סימולציה שונה
-    const seed = Date.now() % 10000;
-    const {schedule:s, counts:c} = smartGenerate(workers, shifts, constraints, year, month, active, seed);
-    setSchedule(s);
-    setCounts(c);
-    saveSchedule(year, month, s, c);
-    setSavedAt(new Date().toISOString());
-  };
+  // נסה לטעון נתונים שהועלו מהאקסל
+  const savedKey = `activeShifts_${year}_${month}`;
+  const savedRaw = localStorage.getItem(savedKey);
+  let active;
+  if (savedRaw) {
+    try {
+      const parsed = JSON.parse(savedRaw);
+      active = {};
+      for (const [day, shifts] of Object.entries(parsed)) {
+        active[Number(day)] = new Set(shifts);
+      }
+    } catch { active = getActiveShiftsByDay(year, month); }
+  } else {
+    active = getActiveShiftsByDay(year, month);
+  }
+  setMergedActive(active);
+  const seed = Date.now() % 10000;
+  const {schedule:s, counts:c} = smartGenerate(workers, shifts, constraints, year, month, active, seed);
+  setSchedule(s); setCounts(c);
+  saveSchedule(year, month, s, c);
+  setSavedAt(new Date().toISOString());
+};
  
   const clearAndRegenerate = () => {
     if (window.confirm("למחוק את התורנות הנוכחית וליצור חדשה?")) {
