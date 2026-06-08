@@ -1,6 +1,5 @@
-ישירות עם גוגל
 const API_URL = "/api/constraints";
- 
+
 async function call(action, data = {}) {
   try {
     const res = await fetch(`${API_URL}?action=${action}&${new URLSearchParams(data)}`);
@@ -9,7 +8,7 @@ async function call(action, data = {}) {
     return { error: e.message };
   }
 }
- 
+
 async function callPost(action, data = {}) {
   try {
     const res = await fetch(API_URL, {
@@ -22,7 +21,7 @@ async function callPost(action, data = {}) {
     return { error: e.message };
   }
 }
- 
+
 export const api = {
   getConstraints:  (month) => call("getConstraints", { month }),
   saveConstraint:  (data)  => callPost("saveConstraint", data),
