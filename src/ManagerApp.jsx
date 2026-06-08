@@ -397,10 +397,18 @@ setMergedActive(Object.keys(fromExcel).length > 0 ? fromExcel : fromStatic);
                 <span style={{fontWeight:900,fontSize:20,minWidth:140,textAlign:"center"}}>{MONTHS_HE[month]} {year}</span>
                 <Btn onClick={nextMonth} variant="ghost" small>›</Btn>
               </div>
-              <div style={{display:"flex",gap:8}}>
-                {schedule&&<Btn onClick={()=>setPrintMode(true)} variant="ghost" small>🖨️ רשימה להדפסה</Btn>}
-                <Btn onClick={generate} disabled={!anyLoaded}>⚡ צור תורנות</Btn>
-              </div>
+             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+  <Btn onClick={loadConstraints} variant="ghost" small disabled={loadingConstraints}>
+    {loadingConstraints?"⏳ טוען...":"🔄 טען אילוצים"}
+  </Btn>
+  {Object.keys(constraints).length>0&&(
+    <span style={{fontSize:11,color:"#10B981",alignSelf:"center"}}>
+      ✅ {Object.values(constraints).reduce((a,b)=>a+b.length,0)} אילוצים
+    </span>
+  )}
+  {schedule&&<Btn onClick={()=>setPrintMode(true)} variant="ghost" small>🖨️ רשימה להדפסה</Btn>}
+  <Btn onClick={generate} disabled={!anyLoaded}>⚡ צור תורנות</Btn>
+</div>
             </div>
 
             {!schedule?(
