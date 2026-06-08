@@ -90,66 +90,102 @@ function getDaysInMonth(y,m){return new Date(y,m+1,0).getDate();}
 function getFirstDay(y,m){return new Date(y,m,1).getDay();}
 
 function smartGenerate(workers,shifts,constraints,year,month,activeShiftsByDay){
-  const days=getDaysInMonth(year,month);
-  const schedule={};
-  const counts={};
-  workers.forEach(w=>{
-    counts[w.id]={total:0,loadTotal:0};
-    shifts.forEach(s=>{counts[w.id][s.id]=0;});
+  const days = new Date(year, month + 1, 0).getDate();
+  const schedule = {};
+  const counts = {}; // counts[wid][sid] = כמה פעמים עשה את התורנות הזו
+ 
+  workers.forEach(w => {
+    counts[w.id] = { total: 0, loadTotal: 0 };
+    shifts.forEach(s => { counts[w.id][s.id] = 0; });
   });
-  for(let d=1;d<=days;d++){
-    schedule[d]={};
-    const todayCount={};
-    workers.forEach(w=>{todayCount[w.id]=0;});
-    const activeSet=activeShiftsByDay?.[d];
-    const dayShifts=activeSet?shifts.filter(s=>activeSet.has(s.id)):shifts;
-    if(!dayShifts.length)continue;
-    const sorted=[...dayShifts].sort((a,b)=>b.hardness-a.hardness);
-    for(const shift of sorted){
-      const eligible=workers
-        .filter(w=>{
-          if(shift.seniorRestrict.includes(w.seniority))return false;
-          if(w.seniority<shift.minSeniority)return false;
-          if(todayCount[w.id]>=MAX_DAY[w.seniority])return false;
-          if(counts[w.id].total>=MAX_MONTH[w.seniority])return false;
-          const cs=constraints[w.id]||[];
-          for(const c of cs){
-            if(c.type==="unavailable"&&c.day===d)return false;
-            if(c.type==="unavailable_weekday"){
-              const dow=new Date(year,month,d).getDay();
-              if(c.weekday===dow)return false;
+ 
+  // יעד עומס לפי שנתון — מנורמל לפי מספר העובדים בשנתון
+  // ככל שהשנתון צעיר יותר — יעד עומס גבוה יותר
+  const seniorityLoadTarget = { 4: 1.0, 3: 1.4, 2: 1.8, 1: 2.2 };
+ 
+  for (let d = 1; d <= days; d++) {
+    schedule[d] = {};
+    const todayCount = {};
+    workers.forEach(w => { todayCount[w.id] = 0; });
+ 
+    const activeSet = activeShiftsByDay?.[d];
+    const dayShifts = activeSet
+      ? shifts.filter(s => activeSet.has(s.id))
+      : shifts;
+    if (!dayShifts.length) continue;
+ 
+    // קשות ראשון
+    const sorted = [...dayShifts].sort((a, b) => b.hardness - a.hardness);
+ 
+    for (const shift of sorted) {
+      const eligible = workers
+        .filter(w => {
+          if (shift.seniorRestrict.includes(w.seniority)) return false;
+          if (w.seniority < (shift.minSeniority || 1)) return false;
+          if (todayCount[w.id] >= ({ 4:1, 3:2, 2:2, 1:2 }[w.seniority] || 2)) return false;
+          if (counts[w.id].total >= ({ 4:14, 3:17, 2:20, 1:24 }[w.seniority] || 20)) return false;
+          const cs = constraints[w.id] || [];
+          for (const c of cs) {
+            if (c.type === "unavailable" && c.day === d) return false;
+            if (c.type === "unavailable_weekday") {
+              const dow = new Date(year, month, d).getDay();
+              if (c.weekday === dow) return false;
             }
-            if(c.type==="shift_off"&&c.shiftLabel===shift.label)return false;
+            if (c.type === "shift_off" && c.shiftLabel === shift.label) return false;
           }
           return true;
         })
-        .sort((a,b)=>{
-          if(a.seniority===b.seniority)return counts[a.id].loadTotal-counts[b.id].loadTotal;
-          if(shift.hardness>=4)return a.seniority-b.seniority;
-          if(shift.hardness<=2)return b.seniority-a.seniority;
-          return(counts[a.id].loadTotal/MAX_MONTH[a.seniority])-(counts[b.id].loadTotal/MAX_MONTH[b.seniority]);
+        .sort((a, b) => {
+          // 1. עדיפות לעומס נמוך יחסית לשנתון
+          const targetA = seniorityLoadTarget[a.seniority] || 1;
+          const targetB = seniorityLoadTarget[b.seniority] || 1;
+          const maxMonth = { 4:14, 3:17, 2:20, 1:24 };
+          const loadRatioA = counts[a.id].loadTotal / (maxMonth[a.seniority] * targetA);
+          const loadRatioB = counts[b.id].loadTotal / (maxMonth[b.seniority] * targetB);
+ 
+          // 2. בתוך אותו שנתון — גיוון: עדיפות למי שעשה פחות מהתורנות הזו
+          if (a.seniority === b.seniority) {
+            const diversityA = counts[a.id][shift.id] / Math.max(counts[a.id].total, 1);
+            const diversityB = counts[b.id][shift.id] / Math.max(counts[b.id].total, 1);
+            // משקל 60% עומס, 40% גיוון
+            const scoreA = 0.6 * loadRatioA + 0.4 * diversityA;
+            const scoreB = 0.6 * loadRatioB + 0.4 * diversityB;
+            return scoreA - scoreB;
+          }
+ 
+          // 3. בין שנתונים — קשה → צעיר קודם, קל → ותיק קודם
+          if (shift.hardness >= 4) return a.seniority - b.seniority;
+          if (shift.hardness <= 2) return b.seniority - a.seniority;
+          return loadRatioA - loadRatioB;
         });
-      const fallback=eligible.length>0?eligible:workers
-        .filter(w=>{
-          const cs=constraints[w.id]||[];
-          return !cs.some(c=>c.type==="unavailable"&&c.day===d)&&
-                 todayCount[w.id]<MAX_DAY[w.seniority]&&
-                 w.seniority>=shift.minSeniority;
+ 
+      const fallback = eligible.length > 0 ? eligible : workers
+        .filter(w => {
+          const cs = constraints[w.id] || [];
+          return !cs.some(c => c.type === "unavailable" && c.day === d) &&
+                 todayCount[w.id] < ({ 4:1, 3:2, 2:2, 1:2 }[w.seniority] || 2) &&
+                 w.seniority >= (shift.minSeniority || 1);
         })
-        .sort((a,b)=>(counts[a.id].loadTotal/MAX_MONTH[a.seniority])-(counts[b.id].loadTotal/MAX_MONTH[b.seniority]));
-      if(fallback.length>0){
-        const w=fallback[0];
-        schedule[d][shift.id]=w.id;
+        .sort((a, b) => {
+          const maxMonth = { 4:14, 3:17, 2:20, 1:24 };
+          return (counts[a.id].loadTotal / maxMonth[a.seniority]) -
+                 (counts[b.id].loadTotal / maxMonth[b.seniority]);
+        });
+ 
+      if (fallback.length > 0) {
+        const w = fallback[0];
+        schedule[d][shift.id] = w.id;
         counts[w.id][shift.id]++;
         counts[w.id].total++;
-        counts[w.id].loadTotal+=shift.hardness;
+        counts[w.id].loadTotal += shift.hardness;
         todayCount[w.id]++;
-      }else{
-        schedule[d][shift.id]=null;
+      } else {
+        schedule[d][shift.id] = null;
       }
     }
   }
-  return{schedule,counts};
+ 
+  return { schedule, counts };
 }
 
 // ─── UI ATOMS ─────────────────────────────────────────────────────────────────
