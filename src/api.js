@@ -1,5 +1,5 @@
 // ─── Google Apps Script API ───────────────────────────────────────────────────
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwVguuON4jolEAXKkRKd_T_tJbVJCSifBy1ljMUGUI9qSW137WcQNRWmCwzb4o6lY9kOg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyUieYRY-eHSg9-KNfdPHJfI600YePNdf9PaeFaUgoSy0KnR3Jp9dhV8cYkZUwVszy9Tw/exec";
 
 async function callScript(action, data = {}) {
   try {
