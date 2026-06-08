@@ -252,8 +252,11 @@ export default function ManagerApp(){
     if(a)results.push(a.active);
     if(e)results.push(e.active);
     if(s)results.push(s.active);
-    if(!results.length){setMergedActive(null);return;}
-const fromExcel = mergeActive(results);
+if(!results.length){
+  setMergedActive(getActiveShiftsByDay(year, month));
+  setSchedule(null);
+  return;
+}const fromExcel = mergeActive(results);
 const fromStatic = getActiveShiftsByDay(year, month);
 setMergedActive(Object.keys(fromExcel).length > 0 ? fromExcel : fromStatic);
     setSchedule(null);
