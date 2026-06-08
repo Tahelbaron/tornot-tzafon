@@ -1,5 +1,7 @@
 {
-    "rewrites": [
-        { "source": "/(.*)", "destination": "/index.html" }
-    ]
+  "rewrites": [
+    { "source": "/api/constraints", "destination": "/api/constraints" },
+    { "source": "/api/upload", "destination": "/api/upload" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
