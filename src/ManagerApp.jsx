@@ -446,6 +446,17 @@ setMergedActive(Object.keys(fromExcel).length > 0 ? fromExcel : fromStatic);
                         <div style={{fontWeight:800,fontSize:12,color:isToday?"#6366F1":hasPink?"#C084FC":"#374151",marginBottom:3}}>
                           {day}{hasPink&&<span style={{fontSize:8,color:"#E49EDD",marginRight:2}}>●</span>}
                         </div>
+                        {(() => {
+  const unavail = workers.filter(w => {
+    const cs = constraints[w.id] || [];
+    return cs.some(c => c.type === "unavailable" && c.day === day);
+  });
+  return unavail.length > 0 ? (
+    <div style={{fontSize:8,color:"#EF4444",marginBottom:2,fontWeight:700}}>
+      🚫 {unavail.map(w=>w.name).join(", ")}
+    </div>
+  ) : null;
+})()}
                         {active.length===0&&mergedActive&&<div style={{fontSize:9,color:"#1E293B",fontStyle:"italic"}}>לא פעיל</div>}
                         <div style={{display:"flex",flexDirection:"column",gap:2}}>
                           {workerIds.slice(0,5).map(wid=>{
