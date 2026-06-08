@@ -1,4 +1,3 @@
-שר בין האתר לגוגל שיטס
 // רץ על שרתי Vercel, עוקף את בעיית CORS
  
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzaNej_rcfKCjidNzHIvSeTyIpGUTNXtTCpm0Zzy0JPF4FPvKue-tL_vpJWj3lut-ywBA/exec";
