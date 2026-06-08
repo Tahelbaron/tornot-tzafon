@@ -389,29 +389,7 @@ setMergedActive(Object.keys(fromExcel).length > 0 ? fromExcel : fromStatic);
 
         {tab==="schedule"&&(
           <div>
-            {/* Upload */}
-            <Card style={{marginBottom:16}}>
-              <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>📂 העלאת קבצי אקסל</div>
-              <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:12}}>
-                <UploadBox label="אולם" color={SHEET_COLOR["אולם"]} icon="🏛️"
-                  loaded={alonLoaded} onFile={handleAlon} onClear={()=>{setAlonLoaded(null);remerge(null,erkimLoaded,shaarLoaded);}}/>
-                <UploadBox label="כתיבה / עריקים" color={SHEET_COLOR["כתיבה"]} icon="✍️"
-                  loaded={erkimLoaded} onFile={handleErkim} onClear={()=>{setErkimLoaded(null);remerge(alonLoaded,null,shaarLoaded);}}/>
-                <UploadBox label="שער" color={SHEET_COLOR["שער"]} icon="🚪"
-                  loaded={shaarLoaded} onFile={handleShaar} onClear={()=>{setShaarLoaded(null);remerge(alonLoaded,erkimLoaded,null);}}/>
-              </div>
-              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                <Btn onClick={loadConstraints} variant="ghost" small disabled={loadingConstraints}>
-                  {loadingConstraints?"⏳ טוען...":"🔄 טען אילוצים מגוגל שיטס"}
-                </Btn>
-                {Object.keys(constraints).length>0&&(
-                  <span style={{fontSize:11,color:"#10B981"}}>
-                    ✅ {Object.values(constraints).reduce((a,b)=>a+b.length,0)} אילוצים נטענו
-                  </span>
-                )}
-              </div>
-            </Card>
-
+        
             {/* Month nav */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
