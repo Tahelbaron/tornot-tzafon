@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import * as XLSX from "xlsx";
+import { getActiveShiftsByDay } from "./juneData.js";
 import { WORKERS, SHIFTS, MONTHS_HE, DAYS_HE, HARDNESS_COLOR, MAX_MONTH, MAX_DAY, senColor, senLabel, SHEET_COLOR } from "./constants.js";
 import { api } from "./api.js";
 
@@ -252,7 +253,9 @@ export default function ManagerApp(){
     if(e)results.push(e.active);
     if(s)results.push(s.active);
     if(!results.length){setMergedActive(null);return;}
-    setMergedActive(mergeActive(results));
+const fromExcel = mergeActive(results);
+const fromStatic = getActiveShiftsByDay(year, month);
+setMergedActive(Object.keys(fromExcel).length > 0 ? fromExcel : fromStatic);
     setSchedule(null);
   };
 
@@ -309,7 +312,7 @@ export default function ManagerApp(){
     return set?shifts.filter(s=>set.has(s.id)):[];
   };
 
-  const anyLoaded=alonLoaded||erkimLoaded||shaarLoaded;
+  const anyLoaded = alonLoaded || erkimLoaded || shaarLoaded || getActiveShiftsByDay(year, month) !== null;;
 
   // ── PRINT VIEW ──────────────────────────────────────────────────────────────
   if(printMode&&schedule){
