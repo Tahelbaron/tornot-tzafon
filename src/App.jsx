@@ -1,4 +1,10 @@
-import WorkerConstraints from './WorkerConstraints.jsx'
+import { useState } from "react";
+import WorkerConstraints from "./WorkerConstraints.jsx";
+import ManagerApp from "./ManagerApp.jsx";
+
 export default function App() {
-  return <WorkerConstraints />
+  const path = window.location.pathname;
+  
+  if (path === "/manager") return <ManagerApp />;
+  return <WorkerConstraints />;
 }
