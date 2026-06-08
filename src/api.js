@@ -1,24 +1,26 @@
-// ─── Google Apps Script API ───────────────────────────────────────────────────
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyUieYRY-eHSg9-KNfdPHJfI600YePNdf9PaeFaUgoSy0KnR3Jp9dhV8cYkZUwVszy9Tw/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzaNej_rcfKCjidNzHIvSeTyIpGUTNXtTCpm0Zzy0JPF4FPvKue-tL_vpJWj3lut-ywBA/exec";
 
-async function callScript(action, data = {}) {
-  try {
-    const url = `${SCRIPT_URL}?action=${action}&${new URLSearchParams(data)}`;
-    const res = await fetch(url, { method: "GET" });
-    return await res.json();
-  } catch (e) {
-    console.error("Script error:", e);
-    return { error: e.message };
-  }
+function callScript(action, data = {}) {
+  return new Promise((resolve) => {
+    const callbackName = "cb_" + Date.now();
+    const params = new URLSearchParams({ action, callback: callbackName, ...data });
+    const script = document.createElement("script");
+    window[callbackName] = (result) => {
+      resolve(result);
+      delete window[callbackName];
+      document.body.removeChild(script);
+    };
+    script.src = `${SCRIPT_URL}?${params}`;
+    script.onerror = () => resolve({ error: "network error" });
+    document.body.appendChild(script);
+  });
 }
 
 async function callScriptPost(action, data = {}) {
   try {
-    const res = await fetch(SCRIPT_URL, {
-      method: "POST",
-      body: JSON.stringify({ action, ...data }),
-    });
-    return await res.json();
+    const url = `${SCRIPT_URL}?action=${action}&${new URLSearchParams(data)}`;
+    const res = await fetch(url, { method: "GET", mode: "no-cors" });
+    return { ok: true };
   } catch (e) {
     return { error: e.message };
   }
@@ -26,7 +28,7 @@ async function callScriptPost(action, data = {}) {
 
 export const api = {
   getConstraints: (month) => callScript("getConstraints", { month }),
-  saveConstraint: (data)  => callScriptPost("saveConstraint", data),
-  deleteConstraint:(data) => callScriptPost("deleteConstraint", data),
-  clearMonth: (month)     => callScriptPost("clearMonth", { month }),
+  saveConstraint: (data)  => callScript("saveConstraint", data),
+  deleteConstraint:(data) => callScript("deleteConstraint", data),
+  clearMonth: (month)     => callScript("clearMonth", { month }),
 };
