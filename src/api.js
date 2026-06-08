@@ -1,34 +1,31 @@
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzaNej_rcfKCjidNzHIvSeTyIpGUTNXtTCpm0Zzy0JPF4FPvKue-tL_vpJWj3lut-ywBA/exec";
-
-function callScript(action, data = {}) {
-  return new Promise((resolve) => {
-    const callbackName = "cb_" + Date.now();
-    const params = new URLSearchParams({ action, callback: callbackName, ...data });
-    const script = document.createElement("script");
-    window[callbackName] = (result) => {
-      resolve(result);
-      delete window[callbackName];
-      document.body.removeChild(script);
-    };
-    script.src = `${SCRIPT_URL}?${params}`;
-    script.onerror = () => resolve({ error: "network error" });
-    document.body.appendChild(script);
-  });
-}
-
-async function callScriptPost(action, data = {}) {
+ישירות עם גוגל
+const API_URL = "/api/constraints";
+ 
+async function call(action, data = {}) {
   try {
-    const url = `${SCRIPT_URL}?action=${action}&${new URLSearchParams(data)}`;
-    const res = await fetch(url, { method: "GET", mode: "no-cors" });
-    return { ok: true };
+    const res = await fetch(`${API_URL}?action=${action}&${new URLSearchParams(data)}`);
+    return await res.json();
   } catch (e) {
     return { error: e.message };
   }
 }
-
+ 
+async function callPost(action, data = {}) {
+  try {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...data }),
+    });
+    return await res.json();
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+ 
 export const api = {
-  getConstraints: (month) => callScript("getConstraints", { month }),
-  saveConstraint: (data)  => callScript("saveConstraint", data),
-  deleteConstraint:(data) => callScript("deleteConstraint", data),
-  clearMonth: (month)     => callScript("clearMonth", { month }),
+  getConstraints:  (month) => call("getConstraints", { month }),
+  saveConstraint:  (data)  => callPost("saveConstraint", data),
+  deleteConstraint:(data)  => callPost("deleteConstraint", data),
+  clearMonth:      (month) => callPost("clearMonth", { month }),
 };
