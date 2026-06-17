@@ -11,7 +11,7 @@ function loadWorkers(){try{const r=localStorage.getItem("workers");return r?JSON
 function loadActiveShifts(y,m){
   try{
     const r=localStorage.getItem(`activeShifts_${y}_${m}`);
-    if(!r) return null;
+    if(!r)return null;
     const parsed=JSON.parse(r);
     const result={};
     for(const[day,shifts]of Object.entries(parsed)) result[Number(day)]=new Set(shifts);
@@ -23,19 +23,30 @@ function loadActiveShifts(y,m){
 function getDaysInMonth(y,m){return new Date(y,m+1,0).getDate();}
 function getFirstDay(y,m){return new Date(y,m,1).getDay();}
 
-// תורנויות שדורשות יום הכנה לפני
 const NEEDS_PREP = new Set(["a1","a3","a4","a5","a6","a7","a8","a9","a10"]);
+
+// מגבלות גיוון חודשיות לפי תורנות
+const SHIFT_MAX = {
+  "a1": 1, // מעצרים — מקסימום 1
+  "a2": 1, // פיצול — מקסימום 1
+};
+// שער א+ב ביחד — מקסימום 1 (נספר ב-shaarCount)
 
 function getPrevWorkday(y,m,d){
   const dow=new Date(y,m,d).getDay();
-  return dow===0?d-3:d-1; // ראשון → חמישי
+  return dow===0?d-3:d-1;
 }
 
 function smartGenerate(workers,shifts,constraints,year,month,activeShiftsByDay,seed){
   const days=getDaysInMonth(year,month);
   const schedule={};
   const counts={};
-  workers.forEach(w=>{counts[w.id]={total:0,loadTotal:0};shifts.forEach(s=>{counts[w.id][s.id]=0;});});
+  // counts[wid][sid] = כמה פעמים עשה, plus special counters
+  workers.forEach(w=>{
+    counts[w.id]={total:0,loadTotal:0,shaarCount:0};
+    shifts.forEach(s=>{counts[w.id][s.id]=0;});
+  });
+
   const senTarget={4:1.0,3:1.4,2:1.8,1:2.2};
 
   for(let d=1;d<=days;d++){
@@ -43,6 +54,7 @@ function smartGenerate(workers,shifts,constraints,year,month,activeShiftsByDay,s
     const todayCount={};
     const alonCount={};
     workers.forEach(w=>{todayCount[w.id]=0;alonCount[w.id]=0;});
+
     const activeSet=activeShiftsByDay?.[d];
     const dayShifts=activeSet?shifts.filter(s=>activeSet.has(s.id)):shifts;
     if(!dayShifts.length) continue;
@@ -50,15 +62,22 @@ function smartGenerate(workers,shifts,constraints,year,month,activeShiftsByDay,s
 
     for(const shift of sorted){
       const prevDay=getPrevWorkday(year,month,d);
+
       const eligible=workers.filter(w=>{
         if(shift.seniorRestrict.includes(w.seniority)) return false;
         if(w.seniority<(shift.minSeniority||1)) return false;
         if(todayCount[w.id]>=(MAX_DAY[w.seniority]||2)) return false;
-        if(shift.sheet==="אולם"&&alonCount[w.id]>=(MAX_DAY_ALON?.[w.seniority]||1)) return false;
         if(counts[w.id].total>=(MAX_MONTH[w.seniority]||20)) return false;
+        // אחת ביום באולם
+        if(shift.sheet==="אולם"&&alonCount[w.id]>=(MAX_DAY_ALON?.[w.seniority]||1)) return false;
+        // מגבלות גיוון
+        if(SHIFT_MAX[shift.id]&&counts[w.id][shift.id]>=(SHIFT_MAX[shift.id])) return false;
+        // שער א+ב — מקסימום 1 ביחד
+        if((shift.id==="s1"||shift.id==="s2")&&counts[w.id].shaarCount>=1) return false;
+        // חוק יום לפני
         const cs=constraints[w.id]||[];
         for(const c of cs){
-          if((c.type==="unavailable"||c.type==="military"||c.type==="personal")&&c.day===d) return false;
+          if((c.type==="military"||c.type==="personal"||c.type==="unavailable")&&c.day===d) return false;
           if(NEEDS_PREP.has(shift.id)&&prevDay>=1){
             if((c.type==="military"||c.type==="personal"||c.type==="unavailable")&&c.day===prevDay) return false;
           }
@@ -69,11 +88,12 @@ function smartGenerate(workers,shifts,constraints,year,month,activeShiftsByDay,s
         const lA=counts[a.id].loadTotal/(MAX_MONTH[a.seniority]*tA);
         const lB=counts[b.id].loadTotal/(MAX_MONTH[b.seniority]*tB);
         if(a.seniority===b.seniority){
-          const dA=counts[a.id][shift.id]/Math.max(counts[a.id].total,1);
-          const dB=counts[b.id][shift.id]/Math.max(counts[b.id].total,1);
-          const rA=(Math.sin(seed*a.id*d)*0.5+0.5)*0.2;
-          const rB=(Math.sin(seed*b.id*d)*0.5+0.5)*0.2;
-          return(0.5*lA+0.3*dA+rA)-(0.5*lB+0.3*dB+rB);
+          // גיוון: עדיפות למי שעשה פחות מהתורנות הזו יחסית לסך הכל
+          const dvA=counts[a.id][shift.id]/Math.max(counts[a.id].total,1);
+          const dvB=counts[b.id][shift.id]/Math.max(counts[b.id].total,1);
+          const rA=(Math.sin(seed*a.id*d*shift.id.charCodeAt(0))*0.5+0.5)*0.15;
+          const rB=(Math.sin(seed*b.id*d*shift.id.charCodeAt(0))*0.5+0.5)*0.15;
+          return(0.45*lA+0.4*dvA+rA)-(0.45*lB+0.4*dvB+rB);
         }
         if(shift.hardness>=4) return a.seniority-b.seniority;
         if(shift.hardness<=2) return b.seniority-a.seniority;
@@ -82,10 +102,14 @@ function smartGenerate(workers,shifts,constraints,year,month,activeShiftsByDay,s
 
       let chosen=eligible[0], isConflict=false;
       if(!chosen){
-        const fb=workers.filter(w=>todayCount[w.id]<(MAX_DAY[w.seniority]||2)&&w.seniority>=(shift.minSeniority||1))
-          .sort((a,b)=>(counts[a.id].loadTotal/MAX_MONTH[a.seniority])-(counts[b.id].loadTotal/MAX_MONTH[b.seniority]));
+        // fallback — שים מישהו גם על אילוץ
+        const fb=workers.filter(w=>{
+          if(shift.sheet==="אולם"&&alonCount[w.id]>=(MAX_DAY_ALON?.[w.seniority]||1)) return false;
+          return todayCount[w.id]<(MAX_DAY[w.seniority]||2)&&w.seniority>=(shift.minSeniority||1);
+        }).sort((a,b)=>(counts[a.id].loadTotal/MAX_MONTH[a.seniority])-(counts[b.id].loadTotal/MAX_MONTH[b.seniority]));
         chosen=fb[0]; isConflict=!!chosen;
       }
+
       if(chosen){
         schedule[d][shift.id]=chosen.id;
         if(isConflict) schedule[d][`${shift.id}_conflict`]=true;
@@ -94,6 +118,7 @@ function smartGenerate(workers,shifts,constraints,year,month,activeShiftsByDay,s
         counts[chosen.id].loadTotal+=shift.hardness;
         todayCount[chosen.id]++;
         if(shift.sheet==="אולם") alonCount[chosen.id]++;
+        if(shift.id==="s1"||shift.id==="s2") counts[chosen.id].shaarCount++;
       }else{
         schedule[d][shift.id]=null;
       }
@@ -109,26 +134,22 @@ const Sel=({value,onChange,children,style={}})=>(<select value={value} onChange=
 const Inp=({value,onChange,placeholder,style={}})=>(<input value={value} onChange={onChange} placeholder={placeholder} style={{padding:"8px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontFamily:"'Heebo',sans-serif",fontSize:13,outline:"none",...style}}/>);
 const TabBar=({tabs,active,onChange})=>(<div style={{display:"flex",gap:3,background:"#0F172A",borderRadius:10,padding:3,flexWrap:"wrap"}}>{tabs.map(([id,label])=>(<button key={id} onClick={()=>onChange(id)} style={{padding:"6px 13px",borderRadius:7,border:"none",cursor:"pointer",fontFamily:"'Heebo',sans-serif",fontWeight:700,fontSize:12,background:active===id?"linear-gradient(135deg,#3B82F6,#6366F1)":"transparent",color:active===id?"#fff":"#64748B"}}>{label}</button>))}</div>);
 
-// ─── DEADLINE EDITOR ──────────────────────────────────────────────────────────
 function DeadlineEditor(){
   const stored=localStorage.getItem("deadline");
-  const [deadline,setDeadline]=useState(stored||"2026-07-20");
-  const [saved,setSaved]=useState(false);
+  const[deadline,setDeadline]=useState(stored||"2026-07-20");
+  const[saved,setSaved]=useState(false);
   const save=()=>{localStorage.setItem("deadline",deadline);setSaved(true);setTimeout(()=>setSaved(false),2000);};
   return(
     <div style={{background:"#1E293B",border:"1px solid #334155",borderRadius:14,padding:16,marginBottom:16}}>
       <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>⏰ דדליין הגשת אילוצים</div>
       <div style={{display:"flex",gap:10,alignItems:"center"}}>
-        <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
-          style={{padding:"8px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontFamily:"'Heebo',sans-serif",fontSize:13,outline:"none"}}/>
+        <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)} style={{padding:"8px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontFamily:"'Heebo',sans-serif",fontSize:13,outline:"none"}}/>
         <Btn onClick={save} small>{saved?"✅ נשמר!":"שמור"}</Btn>
       </div>
-      <div style={{fontSize:11,color:"#4B5563",marginTop:6}}>הדדליין מוצג לעובדים בדף האילוצים</div>
     </div>
   );
 }
 
-// ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function ManagerApp(){
   const today=new Date();
   const[year,setYear]=useState(today.getFullYear());
@@ -144,6 +165,7 @@ export default function ManagerApp(){
   const[savedAt,setSavedAt]=useState(null);
   const[dayModal,setDayModal]=useState(null);
   const[workerModal,setWorkerModal]=useState(null);
+  const[constraintsModal,setConstraintsModal]=useState(null);
   const[editCell,setEditCell]=useState(null);
   const[printMode,setPrintMode]=useState(false);
   const[newWorkerName,setNewWorkerName]=useState("");
@@ -212,6 +234,7 @@ export default function ManagerApp(){
   };
 
   const getWorker=id=>workers.find(w=>w.id===id);
+  const getShift=id=>shifts.find(s=>s.id===id);
   const dayActiveShifts=day=>{
     if(!mergedActive)return shifts;
     const set=mergedActive[day];
@@ -219,6 +242,35 @@ export default function ManagerApp(){
   };
 
   const anyLoaded=!!mergedActive;
+
+  // דוח שיבוצים על אילוץ
+  const conflictReport=useMemo(()=>{
+    if(!schedule||!constraints)return[];
+    const report=[];
+    for(let d=1;d<=daysInMonth;d++){
+      const active=dayActiveShifts(d);
+      for(const shift of active){
+        if(!schedule[d]?.[`${shift.id}_conflict`]) continue;
+        const wid=schedule[d][shift.id];
+        if(!wid) continue;
+        const w=getWorker(wid);
+        if(!w) continue;
+        // מצא את האילוץ
+        const cs=constraints[wid]||[];
+        const constraint=cs.find(c=>c.day===d)||(cs.find(c=>c.day===getPrevWorkday(year,month,d)&&NEEDS_PREP.has(shift.id)));
+        report.push({
+          day:d,
+          worker:w,
+          shift,
+          constraint,
+          isPrevDay:!cs.find(c=>c.day===d),
+        });
+      }
+    }
+    return report;
+  },[schedule,constraints,daysInMonth]);
+
+  const conflictCount=conflictReport.length;
 
   const groupStats=useMemo(()=>{
     if(!schedule)return{};
@@ -232,15 +284,12 @@ export default function ManagerApp(){
     return stats;
   },[counts,workers,schedule]);
 
-  const conflictCount=useMemo(()=>{
-    if(!schedule)return 0;
-    let c=0;
-    for(const day of Object.values(schedule))
-      for(const[k,v]of Object.entries(day))
-        if(k.endsWith("_conflict")&&v)c++;
-    return c;
-  },[schedule]);
+  function getPrevWorkday(y,m,d){
+    const dow=new Date(y,m,d).getDay();
+    return dow===0?d-3:d-1;
+  }
 
+  // PRINT
   if(printMode&&schedule){
     return(
       <div style={{background:"#fff",color:"#000",fontFamily:"'Heebo',sans-serif",direction:"rtl",padding:24,minHeight:"100vh"}}>
@@ -254,9 +303,7 @@ export default function ManagerApp(){
           const dow=new Date(year,month,day).getDay();
           return(
             <div key={day} style={{marginBottom:16,pageBreakInside:"avoid"}}>
-              <div style={{fontWeight:800,fontSize:15,borderBottom:"2px solid #000",paddingBottom:4,marginBottom:8}}>
-                {DAYS_HE[dow]} {day}.{month+1}.{year}
-              </div>
+              <div style={{fontWeight:800,fontSize:15,borderBottom:"2px solid #000",paddingBottom:4,marginBottom:8}}>{DAYS_HE[dow]} {day}.{month+1}.{year}</div>
               {["אולם","כתיבה","שער"].map(sh=>{
                 const shShifts=active.filter(s=>s.sheet===sh);
                 if(!shShifts.length)return null;
@@ -299,11 +346,12 @@ export default function ManagerApp(){
             <div style={{fontSize:11,color:"#4B5563"}}>צפון מטכל ועורף</div>
           </div>
         </div>
-        <TabBar tabs={[["schedule","לוח"],["load","עומס"],["workers","עובדים"],["settings","הגדרות"]]} active={tab} onChange={setTab}/>
+        <TabBar tabs={[["schedule","לוח"],["load","עומס"],["conflicts","התנגשויות"],["workers","עובדים"],["settings","הגדרות"]]} active={tab} onChange={setTab}/>
       </div>
 
       <div style={{maxWidth:1200,margin:"0 auto",padding:"20px 16px"}}>
 
+        {/* ══ SCHEDULE ══ */}
         {tab==="schedule"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
@@ -313,12 +361,16 @@ export default function ManagerApp(){
                 <Btn onClick={nextMonth} variant="ghost" small>›</Btn>
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                {!anyLoaded&&<span style={{fontSize:11,color:"#F59E0B"}}>⚠️ העלה קבצי אקסל ב-<a href="/upload" style={{color:"#3B82F6"}}>/upload</a></span>}
+                {!anyLoaded&&<span style={{fontSize:11,color:"#F59E0B"}}>⚠️ העלה אקסל ב-<a href="/upload" style={{color:"#3B82F6"}}>/upload</a></span>}
                 <Btn onClick={loadConstraints} variant="ghost" small disabled={loadingConstraints}>
                   {loadingConstraints?"⏳":"🔄"} טען אילוצים
                 </Btn>
                 {Object.keys(constraints).length>0&&<span style={{fontSize:11,color:"#10B981"}}>✅ {Object.values(constraints).reduce((a,b)=>a+b.length,0)} אילוצים</span>}
-                {conflictCount>0&&<span style={{fontSize:11,color:"#F59E0B",background:"#F59E0B22",borderRadius:6,padding:"3px 8px",fontWeight:700}}>⚠️ {conflictCount} על אילוץ</span>}
+                {conflictCount>0&&(
+                  <button onClick={()=>setTab("conflicts")} style={{fontSize:11,color:"#F59E0B",background:"#F59E0B22",borderRadius:6,padding:"3px 8px",fontWeight:700,border:"none",cursor:"pointer"}}>
+                    ⚠️ {conflictCount} התנגשויות
+                  </button>
+                )}
                 {schedule&&<Btn onClick={()=>setPrintMode(true)} variant="ghost" small>🖨️</Btn>}
                 {schedule
                   ?<Btn onClick={clearAndRegenerate} small style={{background:"linear-gradient(135deg,#7C3AED,#6366F1)"}}>🔀 סימולציה חדשה</Btn>
@@ -338,9 +390,7 @@ export default function ManagerApp(){
               <Card style={{textAlign:"center",padding:60}}>
                 <div style={{fontSize:52,marginBottom:14}}>🗓️</div>
                 <div style={{fontWeight:800,fontSize:18,marginBottom:8}}>אין תורנות עדיין</div>
-                <div style={{color:"#64748B",fontSize:14,marginBottom:20}}>
-                  {anyLoaded?"לחץ ⚡ לייצור תורנות":"העלה קבצי אקסל ב-/upload תחילה"}
-                </div>
+                <div style={{color:"#64748B",fontSize:14,marginBottom:20}}>{anyLoaded?"לחץ ⚡ לייצור":"העלה קבצי אקסל ב-/upload תחילה"}</div>
                 {anyLoaded&&<Btn onClick={generate}>⚡ צור תורנות</Btn>}
               </Card>
             ):(
@@ -392,6 +442,7 @@ export default function ManagerApp(){
           </div>
         )}
 
+        {/* ══ LOAD ══ */}
         {tab==="load"&&(
           <div>
             {!schedule?(
@@ -421,7 +472,10 @@ export default function ManagerApp(){
                             <div style={{height:4,borderRadius:2,background:"#0F172A",overflow:"hidden"}}>
                               <div style={{height:"100%",borderRadius:2,width:`${Math.min(100,(load/gs.maxLoad)*100)}%`,background:senColor(sen)}}/>
                             </div>
-                            <div style={{fontSize:9,color:"#475569",marginTop:5}}>לחץ לפרטים</div>
+                            <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
+                              <button onClick={e=>{e.stopPropagation();setWorkerModal(w.id);}} style={{fontSize:9,color:"#3B82F6",background:"#3B82F622",border:"none",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontFamily:"'Heebo',sans-serif"}}>תורנות</button>
+                              <button onClick={e=>{e.stopPropagation();setConstraintsModal(w.id);}} style={{fontSize:9,color:"#F59E0B",background:"#F59E0B22",border:"none",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontFamily:"'Heebo',sans-serif"}}>אילוצים</button>
+                            </div>
                           </Card>
                         );
                       })}
@@ -433,6 +487,47 @@ export default function ManagerApp(){
           </div>
         )}
 
+        {/* ══ CONFLICTS ══ */}
+        {tab==="conflicts"&&(
+          <div>
+            <div style={{fontWeight:800,fontSize:16,marginBottom:16}}>⚠️ שיבוצים על אילוץ</div>
+            {!schedule?(
+              <Card style={{textAlign:"center",padding:40}}><div style={{color:"#64748B"}}>צור תורנות תחילה</div></Card>
+            ):conflictReport.length===0?(
+              <Card style={{textAlign:"center",padding:40}}>
+                <div style={{fontSize:36,marginBottom:8}}>✅</div>
+                <div style={{color:"#10B981",fontWeight:700}}>אין שיבוצים על אילוץ!</div>
+              </Card>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {conflictReport.map((item,i)=>{
+                  const dow=new Date(year,month,item.day).getDay();
+                  const cType=item.constraint?.type==="military"?"🎖️ אילוץ צבאי":"👤 אילוץ אישי";
+                  const cNote=item.constraint?.shiftLabel||"";
+                  const prevDay=getPrevWorkday(year,month,item.day);
+                  return(
+                    <div key={i} style={{background:"#1E293B",border:"1px solid #F59E0B44",borderRadius:14,padding:16}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,flexWrap:"wrap"}}>
+                        <span style={{fontWeight:800,fontSize:14,color:"#F59E0B"}}>⚠️ {item.worker.name}</span>
+                        <span style={{fontSize:12,color:"#64748B"}}>{DAYS_HE[dow]} {item.day}.{month+1}</span>
+                        <span style={{background:item.shift.bg,color:item.shift.dark,borderRadius:6,padding:"2px 8px",fontSize:12,fontWeight:700}}>{item.shift.label}</span>
+                      </div>
+                      <div style={{fontSize:12,color:"#94A3B8"}}>
+                        {item.isPrevDay?(
+                          <>סיבה: יש לו אילוץ ביום {prevDay} ({DAYS_HE[new Date(year,month,prevDay).getDay()]}) — יום לפני תורנות שדורשת הכנה</>
+                        ):(
+                          <>סיבה: {cType}{cNote?` — ${cNote}`:""} ביום {item.day}</>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══ WORKERS ══ */}
         {tab==="workers"&&(
           <div>
             <Card style={{marginBottom:20}}>
@@ -468,7 +563,10 @@ export default function ManagerApp(){
                       <Card key={w.id} style={{padding:13,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                         <div style={{display:"flex",alignItems:"center",gap:10}}>
                           <div style={{width:34,height:34,borderRadius:"50%",background:`hsl(${(w.id*67)%360},55%,48%)`,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,color:"#fff",flexShrink:0}}>{w.name[0]}</div>
-                          <div><div style={{fontWeight:700,fontSize:13}}>{w.name}</div><div style={{fontSize:10,color:"#475569"}}>{senLabel(sen)}</div></div>
+                          <div>
+                            <div style={{fontWeight:700,fontSize:13}}>{w.name}</div>
+                            <div style={{fontSize:10,color:"#475569"}}>{senLabel(sen)}</div>
+                          </div>
                         </div>
                         <button onClick={()=>removeWorker(w.id)} style={{background:"none",border:"1px solid #334155",borderRadius:6,cursor:"pointer",color:"#EF4444",fontSize:11,padding:"2px 8px",fontFamily:"'Heebo',sans-serif"}}>הסר</button>
                       </Card>
@@ -480,11 +578,12 @@ export default function ManagerApp(){
           </div>
         )}
 
+        {/* ══ SETTINGS ══ */}
         {tab==="settings"&&(
           <div>
             <DeadlineEditor/>
             <Card>
-              <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>🔗 קישורים שימושיים</div>
+              <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>🔗 קישורים</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {[["📂 העלאת קבצי אקסל","/upload"],["👥 דף אילוצים לעובדים","/"]].map(([label,href])=>(
                   <a key={href} href={href} style={{color:"#3B82F6",fontSize:13,fontWeight:600}}>{label}</a>
@@ -508,7 +607,7 @@ export default function ManagerApp(){
             </div>
             {dayActiveShifts(dayModal).some(s=>schedule[dayModal]?.[`${s.id}_conflict`])&&(
               <div style={{background:"#F59E0B22",border:"1px solid #F59E0B",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#F59E0B",fontWeight:700}}>
-                ⚠️ יש שיבוצים על אילוץ — נדרשת בדיקה ידנית
+                ⚠️ יש שיבוצים על אילוץ ביום זה
               </div>
             )}
             {["אולם","כתיבה","שער"].map(sh=>{
@@ -581,21 +680,67 @@ export default function ManagerApp(){
                 <div style={{textAlign:"center",padding:30,color:"#64748B"}}>אין תורנויות החודש</div>
               ):(
                 <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {allDays.map(({d,shifts})=>(
-                    <div key={d} style={{background:"#0F172A",borderRadius:10,padding:"10px 14px"}}>
-                      <div style={{fontSize:12,fontWeight:700,color:"#64748B",marginBottom:6}}>{DAYS_HE[new Date(year,month,d).getDay()]} {d}.{month+1}</div>
-                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                        {shifts.map(s=>{
-                          const isConflict=schedule[d]?.[`${s.id}_conflict`];
-                          return(
-                            <span key={s.id} style={{background:isConflict?"#F59E0B22":s.bg,color:isConflict?"#F59E0B":s.dark,borderRadius:6,padding:"3px 10px",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
-                              {s.label}{isConflict&&<span style={{fontSize:9}}>⚠️</span>}<span style={{fontSize:9,color:HARDNESS_COLOR[s.hardness]}}>●{s.hardness}</span>
-                            </span>
-                          );
-                        })}
+                  {allDays.map(({d,ds_shifts:ds,shifts:ds2})=>{
+                    const dayShiftsToShow=ds||ds2||[];
+                    return(
+                      <div key={d} style={{background:"#0F172A",borderRadius:10,padding:"10px 14px"}}>
+                        <div style={{fontSize:12,fontWeight:700,color:"#64748B",marginBottom:6}}>{DAYS_HE[new Date(year,month,d).getDay()]} {d}.{month+1}</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                          {(ds2||[]).map(s=>{
+                            const isConflict=schedule[d]?.[`${s.id}_conflict`];
+                            return(
+                              <span key={s.id} style={{background:isConflict?"#F59E0B22":s.bg,color:isConflict?"#F59E0B":s.dark,borderRadius:6,padding:"3px 10px",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                                {s.label}{isConflict&&<span style={{fontSize:9}}>⚠️</span>}<span style={{fontSize:9,color:HARDNESS_COLOR[s.hardness]}}>●{s.hardness}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* CONSTRAINTS MODAL */}
+      {constraintsModal!==null&&(()=>{
+        const w=workers.find(x=>x.id===constraintsModal);if(!w)return null;
+        const wcs=(constraints[w.id]||[]).filter(c=>c.month===monthKey);
+        return(
+          <div onClick={()=>setConstraintsModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:"#111827",border:"1px solid #1F2937",borderRadius:20,padding:24,width:"100%",maxWidth:480,maxHeight:"88vh",overflowY:"auto",direction:"rtl"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                <div>
+                  <div style={{fontWeight:900,fontSize:20}}>{w.name}</div>
+                  <div style={{fontSize:12,color:"#4B5563"}}>אילוצים — {MONTHS_HE[month]} {year}</div>
+                </div>
+                <button onClick={()=>setConstraintsModal(null)} style={{background:"none",border:"none",color:"#6B7280",fontSize:24,cursor:"pointer"}}>×</button>
+              </div>
+              {wcs.length===0?(
+                <div style={{textAlign:"center",padding:30,color:"#64748B"}}>אין אילוצים החודש</div>
+              ):(
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {wcs.sort((a,b)=>(a.day||0)-(b.day||0)).map(c=>{
+                    const icon=c.type==="military"?"🎖️":"👤";
+                    const dow=new Date(year,month,c.day).getDay();
+                    const dayStr=`${DAYS_HE[dow]} ${c.day}.${month+1}`;
+                    const label=c.shiftLabel?`${dayStr} — ${c.shiftLabel}`:dayStr;
+                    // האם שובץ ביום הזה?
+                    const assignedShifts=dayActiveShifts(c.day).filter(s=>schedule?.[c.day]?.[s.id]===w.id);
+                    return(
+                      <div key={c.id} style={{background:"#0F172A",borderRadius:10,padding:"10px 14px",border:`1px solid ${assignedShifts.length?"#F59E0B44":"#1E293B"}`}}>
+                        <div style={{fontSize:13,marginBottom:assignedShifts.length?6:0}}>{icon} {label}</div>
+                        {assignedShifts.length>0&&(
+                          <div style={{fontSize:11,color:"#F59E0B"}}>
+                            ⚠️ שובץ ל: {assignedShifts.map(s=>s.label).join(", ")}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
