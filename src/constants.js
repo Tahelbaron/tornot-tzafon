@@ -13,7 +13,7 @@ export const WORKERS = [
   { id:12, name:"אמיתי", seniority:1 },
   { id:13, name:"סופיה", seniority:1 },
 ];
- 
+
 export const SHIFTS = [
   // אולם
   { id:"a1",  sheet:"אולם",  label:"מעצרים",         hardness:5, color:"#10B981", bg:"#D1FAE5", dark:"#064E3B", seniorRestrict:[4,3], minSeniority:1 },
@@ -37,7 +37,7 @@ export const SHIFTS = [
   { id:"s2",  sheet:"שער",   label:"שער ב",           hardness:5, color:"#6D28D9", bg:"#DDD6FE", dark:"#2E1065", seniorRestrict:[4],   minSeniority:1 },
   { id:"s3",  sheet:"שער",   label:"עתודת שער",       hardness:1, color:"#64748B", bg:"#F1F5F9", dark:"#1E293B", seniorRestrict:[],    minSeniority:1 },
 ];
- 
+
 export const MONTHS_HE = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
 export const DAYS_HE   = ["א׳","ב׳","ג׳","ד׳","ה׳","ו׳","ש׳"];
 export const HARDNESS_COLOR = {1:"#10B981",2:"#84CC16",3:"#F59E0B",4:"#F97316",5:"#EF4444"};
