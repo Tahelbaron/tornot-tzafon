@@ -59,22 +59,26 @@ export default function UploadPage() {
     );
   };
 
-  // חישוב סטטיסטיקות מהתוצאה
+  // חישוב סטטיסטיקות
   const getStats = () => {
     if (!result) return null;
-    const bySheet = { אולם: {days:new Set(), shifts:[]}, כתיבה: {days:new Set(), shifts:[]}, שער: {days:new Set(), shifts:[]} };
-    const shiftCounts = {};
-
+    const byDay = {};
     for (const [day, shiftIds] of Object.entries(result.activeShiftsByDay)) {
+      const d = Number(day);
+      byDay[d] = { אולם:[], כתיבה:[], שער:[] };
       for (const sid of shiftIds) {
         const shift = SHIFTS.find(s => s.id === sid);
-        if (!shift) continue;
-        bySheet[shift.sheet]?.days.add(Number(day));
-        bySheet[shift.sheet]?.shifts.push({sid, day: Number(day), shift});
-        shiftCounts[sid] = (shiftCounts[sid] || 0) + 1;
+        if (shift) byDay[d][shift.sheet].push(shift);
       }
     }
-    return { bySheet, shiftCounts };
+    // סיכומים
+    const totals = { אולם:0, כתיבה:0, שער:0 };
+    for (const day of Object.values(byDay)) {
+      totals["אולם"]  += day["אולם"].length;
+      totals["כתיבה"] += day["כתיבה"].length;
+      totals["שער"]   += day["שער"].length;
+    }
+    return { byDay, totals };
   };
 
   const stats = getStats();
@@ -93,7 +97,9 @@ export default function UploadPage() {
         </div>
       </div>
 
-      <div style={{maxWidth:800,margin:"0 auto",padding:"28px 16px"}}>
+      <div style={{maxWidth:900,margin:"0 auto",padding:"28px 16px"}}>
+
+        {/* העלאה */}
         <div style={{background:"#1E293B",border:"1px solid #334155",borderRadius:18,padding:24,marginBottom:20}}>
           <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>העלה את קבצי האקסל של החודש</div>
           <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
@@ -124,67 +130,42 @@ export default function UploadPage() {
             <div style={{background:"#1E293B",border:"1px solid #10B981",borderRadius:18,padding:24,marginBottom:16}}>
               <div style={{fontWeight:800,fontSize:16,color:"#10B981",marginBottom:4}}>✅ עובד בהצלחה!</div>
               <div style={{fontSize:13,color:"#64748B",marginBottom:16}}>
-                {result.totalDays} ימים פעילים · {result.totalShifts} תורנויות ורודות זוהו
+                {result.totalDays} ימים פעילים · {result.totalShifts} תורנויות סה"כ
+                {" "}({stats.totals["אולם"]} אולם · {stats.totals["כתיבה"]} כתיבה · {stats.totals["שער"]} שער)
               </div>
 
-              {/* פירוט לפי גליון */}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12,marginBottom:20}}>
-                {["אולם","כתיבה","שער"].map(sh=>{
-                  const s=stats.bySheet[sh];
-                  if(!s||s.shifts.length===0)return null;
-                  return(
-                    <div key={sh} style={{background:"#0F172A",borderRadius:12,padding:14,border:`1px solid ${SHEET_COLOR[sh]}33`}}>
-                      <div style={{fontWeight:700,fontSize:14,color:SHEET_COLOR[sh],marginBottom:8}}>
-                        {sh==="אולם"?"🏛️":sh==="כתיבה"?"✍️":"🚪"} {sh}
-                      </div>
-                      <div style={{fontSize:12,color:"#64748B",marginBottom:4}}>{s.days.size} ימים · {s.shifts.length} תורנויות</div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* פירוט לפי תורנות */}
-              <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>פירוט לפי סוג תורנות:</div>
-              {["אולם","כתיבה","שער"].map(sh=>{
-                const shShifts=SHIFTS.filter(s=>s.sheet===sh&&stats.shiftCounts[s.id]);
-                if(!shShifts.length)return null;
-                return(
-                  <div key={sh} style={{marginBottom:16}}>
-                    <div style={{fontSize:12,fontWeight:700,color:SHEET_COLOR[sh],marginBottom:8}}>
-                      {sh==="אולם"?"🏛️":sh==="כתיבה"?"✍️":"🚪"} {sh}
-                    </div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                      {shShifts.map(shift=>(
-                        <div key={shift.id} style={{background:shift.bg,borderRadius:8,padding:"6px 12px",display:"flex",alignItems:"center",gap:8}}>
-                          <span style={{fontSize:12,fontWeight:700,color:shift.dark}}>{shift.label}</span>
-                          <span style={{fontSize:11,color:shift.color,fontWeight:800,background:"#00000022",borderRadius:4,padding:"1px 6px"}}>
-                            ×{stats.shiftCounts[shift.id]}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* פירוט לפי יום */}
-              <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>פירוט לפי יום:</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                {Object.entries(result.activeShiftsByDay)
+              {/* פריסה לפי יום */}
+              <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>פריסת תורנויות לפי יום:</div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {Object.entries(stats.byDay)
                   .sort(([a],[b])=>Number(a)-Number(b))
-                  .map(([day,shiftIds])=>{
-                    const bySheet={אולם:0,כתיבה:0,שער:0};
-                    for(const sid of shiftIds){
-                      const s=SHIFTS.find(x=>x.id===sid);
-                      if(s)bySheet[s.sheet]++;
-                    }
+                  .map(([day,sheets])=>{
+                    const total=sheets["אולם"].length+sheets["כתיבה"].length+sheets["שער"].length;
+                    if(total===0)return null;
                     return(
-                      <div key={day} style={{background:"#0F172A",borderRadius:10,padding:"8px 12px",fontSize:11,minWidth:120}}>
-                        <div style={{fontWeight:800,color:"#E2E8F0",marginBottom:4}}>יום {day} — {shiftIds.length} תורנויות</div>
-                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                          {bySheet["אולם"]>0&&<span style={{color:SHEET_COLOR["אולם"]}}>🏛️{bySheet["אולם"]}</span>}
-                          {bySheet["כתיבה"]>0&&<span style={{color:SHEET_COLOR["כתיבה"]}}>✍️{bySheet["כתיבה"]}</span>}
-                          {bySheet["שער"]>0&&<span style={{color:SHEET_COLOR["שער"]}}>🚪{bySheet["שער"]}</span>}
+                      <div key={day} style={{background:"#0F172A",borderRadius:12,padding:"12px 16px",border:"1px solid #1E293B"}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                          <div style={{fontWeight:800,fontSize:14,color:"#E2E8F0"}}>יום {day}</div>
+                          <div style={{fontSize:11,color:"#475569"}}>
+                            {total} תורנויות
+                            {" "}({sheets["אולם"].length} אולם · {sheets["כתיבה"].length} כתיבה · {sheets["שער"].length} שער)
+                          </div>
+                        </div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                          {["אולם","כתיבה","שער"].map(sh=>
+                            sheets[sh].map(shift=>(
+                              <span key={shift.id} style={{
+                                background:shift.bg,color:shift.dark,
+                                borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,
+                                display:"flex",alignItems:"center",gap:4,
+                              }}>
+                                {shift.label}
+                                <span style={{fontSize:9,opacity:0.6,background:"#00000022",borderRadius:3,padding:"0 3px"}}>
+                                  {sh==="אולם"?"🏛️":sh==="כתיבה"?"✍️":"🚪"}
+                                </span>
+                              </span>
+                            ))
+                          )}
                         </div>
                       </div>
                     );
@@ -193,7 +174,7 @@ export default function UploadPage() {
             </div>
 
             <div style={{background:"#0F172A",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#10B981",border:"1px solid #10B98133",textAlign:"center"}}>
-              ✅ הנתונים נשמרו! עכשיו עבור ל-
+              ✅ הנתונים נשמרו! עבור ל-
               <a href="/manager" style={{color:"#3B82F6",fontWeight:700}}> /manager </a>
               ולחץ ⚡ צור תורנות
             </div>
