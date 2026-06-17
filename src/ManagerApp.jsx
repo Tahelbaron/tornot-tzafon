@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { WORKERS as INITIAL_WORKERS, SHIFTS, MONTHS_HE, DAYS_HE, HARDNESS_COLOR, MAX_MONTH, MAX_DAY, senColor, senLabel, SHEET_COLOR } from "./constants.js";
+import { WORKERS as INITIAL_WORKERS, SHIFTS, MONTHS_HE, DAYS_HE, HARDNESS_COLOR, MAX_MONTH, MAX_DAY, MAX_DAY_ALON, senColor, senLabel, SHEET_COLOR } from "./constants.js";
 import { api } from "./api.js";
 
 // ─── STORAGE ──────────────────────────────────────────────────────────────────
@@ -41,7 +41,8 @@ function smartGenerate(workers,shifts,constraints,year,month,activeShiftsByDay,s
   for(let d=1;d<=days;d++){
     schedule[d]={};
     const todayCount={};
-    workers.forEach(w=>{todayCount[w.id]=0;});
+    const alonCount={};
+    workers.forEach(w=>{todayCount[w.id]=0;alonCount[w.id]=0;});
     const activeSet=activeShiftsByDay?.[d];
     const dayShifts=activeSet?shifts.filter(s=>activeSet.has(s.id)):shifts;
     if(!dayShifts.length) continue;
@@ -53,6 +54,7 @@ function smartGenerate(workers,shifts,constraints,year,month,activeShiftsByDay,s
         if(shift.seniorRestrict.includes(w.seniority)) return false;
         if(w.seniority<(shift.minSeniority||1)) return false;
         if(todayCount[w.id]>=(MAX_DAY[w.seniority]||2)) return false;
+        if(shift.sheet==="אולם"&&alonCount[w.id]>=(MAX_DAY_ALON?.[w.seniority]||1)) return false;
         if(counts[w.id].total>=(MAX_MONTH[w.seniority]||20)) return false;
         const cs=constraints[w.id]||[];
         for(const c of cs){
@@ -91,6 +93,7 @@ function smartGenerate(workers,shifts,constraints,year,month,activeShiftsByDay,s
         counts[chosen.id].total++;
         counts[chosen.id].loadTotal+=shift.hardness;
         todayCount[chosen.id]++;
+        if(shift.sheet==="אולם") alonCount[chosen.id]++;
       }else{
         schedule[d][shift.id]=null;
       }
