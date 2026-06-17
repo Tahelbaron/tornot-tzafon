@@ -15,7 +15,8 @@ export const WORKERS = [
 ];
 
 export const SHIFTS = [
-  // אולם
+  // אולם — רמת קושי לפי הגדרה
+  // שנה רביעית לא עושה קושי 5 (מעצרים, שער א, שער ב) — מוגדר ב-seniorRestrict
   { id:"a1",  sheet:"אולם",  label:"מעצרים",         hardness:5, color:"#10B981", bg:"#D1FAE5", dark:"#064E3B", seniorRestrict:[4,3], minSeniority:1 },
   { id:"a2",  sheet:"אולם",  label:"פיצול",           hardness:4, color:"#06B6D4", bg:"#CFFAFE", dark:"#164E63", seniorRestrict:[],    minSeniority:1 },
   { id:"a3",  sheet:"אולם",  label:"משלב 1+2",        hardness:4, color:"#3B82F6", bg:"#DBEAFE", dark:"#1E3A8A", seniorRestrict:[4,3], minSeniority:1 },
@@ -32,7 +33,7 @@ export const SHIFTS = [
   { id:"e3",  sheet:"כתיבה", label:"משתמטים 1",       hardness:4, color:"#EAB308", bg:"#FEF9C3", dark:"#713F12", seniorRestrict:[],    minSeniority:1 },
   { id:"e4",  sheet:"כתיבה", label:"משתמטים 2",       hardness:2, color:"#CA8A04", bg:"#FEF08A", dark:"#713F12", seniorRestrict:[],    minSeniority:1 },
   { id:"e5",  sheet:"כתיבה", label:"משתמטים עתודה",   hardness:1, color:"#84CC16", bg:"#F0FDF4", dark:"#14532D", seniorRestrict:[],    minSeniority:1 },
-  // שער
+  // שער — שנה רביעית לא עושה שער א ושער ב (קושי 5)
   { id:"s1",  sheet:"שער",   label:"שער א",           hardness:5, color:"#0EA5E9", bg:"#E0F2FE", dark:"#0C4A6E", seniorRestrict:[4],   minSeniority:1 },
   { id:"s2",  sheet:"שער",   label:"שער ב",           hardness:5, color:"#6D28D9", bg:"#DDD6FE", dark:"#2E1065", seniorRestrict:[4],   minSeniority:1 },
   { id:"s3",  sheet:"שער",   label:"עתודת שער",       hardness:1, color:"#64748B", bg:"#F1F5F9", dark:"#1E293B", seniorRestrict:[],    minSeniority:1 },
@@ -41,8 +42,11 @@ export const SHIFTS = [
 export const MONTHS_HE = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
 export const DAYS_HE   = ["א׳","ב׳","ג׳","ד׳","ה׳","ו׳","ש׳"];
 export const HARDNESS_COLOR = {1:"#10B981",2:"#84CC16",3:"#F59E0B",4:"#F97316",5:"#EF4444"};
-export const MAX_MONTH = {4:14,3:17,2:20,1:24};
-export const MAX_DAY   = {4:1, 3:2, 2:2, 1:2};
+// מגבלות חודשיות לפי שנה
+export const MAX_MONTH = {4:14, 3:17, 2:20, 1:24};
+// מגבלות יומיות: שנה רביעית — תורנות אולם אחת ביום (כולל אולם), שאר השנות — 2
+export const MAX_DAY_ALON = {4:1, 3:1, 2:1, 1:1}; // אולם: רק אחת ביום לכולם
+export const MAX_DAY      = {4:1, 3:2, 2:2, 1:2}; // סך הכל ביום
 export const senColor  = s=>({4:"#10B981",3:"#3B82F6",2:"#F59E0B",1:"#EF4444"}[s]??"#64748B");
 export const senLabel  = s=>({4:"שנה רביעית",3:"שנה שלישית",2:"שנה שניה",1:"שנה ראשונה"}[s]??"-");
 export const SHEET_COLOR = {"אולם":"#6366F1","כתיבה":"#EF4444","שער":"#0EA5E9"};
