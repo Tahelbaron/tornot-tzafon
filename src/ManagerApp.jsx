@@ -179,7 +179,25 @@ export default function ManagerApp(){
     const active=loadActiveShifts(year,month);
     setMergedActive(active);
     const saved=loadSchedule(year,month);
-    if(saved){setSchedule(saved.schedule);setCounts(saved.counts);setSavedAt(saved.savedAt);}
+    if(saved){
+      setSchedule(saved.schedule);
+      setSavedAt(saved.savedAt);
+      // חשב מחדש counts מהסידור כדי להבטיח נכונות
+      const recalc={};
+      workers.forEach(w=>{recalc[w.id]={total:0,loadTotal:0,shaarCount:0};shifts.forEach(s=>{recalc[w.id][s.id]=0;});});
+      for(const[day,daySchedule]of Object.entries(saved.schedule)){
+        for(const[sid,wid]of Object.entries(daySchedule)){
+          if(sid.endsWith("_conflict")||!wid)continue;
+          const shift=shifts.find(s=>s.id===sid);
+          if(!shift||!recalc[wid])continue;
+          recalc[wid][sid]=(recalc[wid][sid]||0)+1;
+          recalc[wid].total++;
+          recalc[wid].loadTotal+=shift.hardness;
+          if(sid==="s1"||sid==="s2")recalc[wid].shaarCount++;
+        }
+      }
+      setCounts(recalc);
+    }
     else{setSchedule(null);setCounts({});setSavedAt(null);}
   },[year,month]);
 
