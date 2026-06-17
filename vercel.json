@@ -1,3 +1,9 @@
 {
-    "rewrites": [
-        { "source": "/api/constraints", "destination": "/api/constraints" }, { "source": "/api/upload", "destination": "/api/upload" },{ "source": "/(.*)", "destination": "/index.html" }]}
+  "functions": {
+    "api/*.js": { "runtime": "nodejs18.x" }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
