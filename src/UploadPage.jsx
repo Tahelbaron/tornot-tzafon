@@ -2,23 +2,25 @@ import { useState, useRef } from "react";
 import { MONTHS_HE, SHIFTS, SHEET_COLOR } from "./constants.js";
 
 export default function UploadPage() {
-  const [alon,  setAlon]  = useState(null);
-  const [erkim, setErkim] = useState(null);
-  const [shaar, setShaar] = useState(null);
-  const [result, setResult] = useState(null);
+  const [alon,       setAlon]       = useState(null);
+  const [erkim,      setErkim]      = useState(null);
+  const [mishtamtim, setMishtamtim] = useState(null);
+  const [shaar,      setShaar]      = useState(null);
+  const [result,  setResult]  = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error,   setError]   = useState(null);
 
   const today = new Date();
   const monthLabel = `${MONTHS_HE[today.getMonth()]} ${today.getFullYear()}`;
 
   const upload = async () => {
-    if (!alon && !erkim && !shaar) return;
+    if (!alon && !erkim && !mishtamtim && !shaar) return;
     setLoading(true); setError(null); setResult(null);
     const fd = new FormData();
-    if (alon)  fd.append("alon",  alon,  alon.name);
-    if (erkim) fd.append("erkim", erkim, erkim.name);
-    if (shaar) fd.append("shaar", shaar, shaar.name);
+    if (alon)       fd.append("alon",       alon,       alon.name);
+    if (erkim)      fd.append("erkim",      erkim,      erkim.name);
+    if (mishtamtim) fd.append("mishtamtim", mishtamtim, mishtamtim.name);
+    if (shaar)      fd.append("shaar",      shaar,      shaar.name);
     try {
       const res = await fetch("/api/upload", { method:"POST", body:fd });
       const data = await res.json();
@@ -39,10 +41,10 @@ export default function UploadPage() {
   const FileBox = ({label, icon, color, file, setFile}) => {
     const ref = useRef();
     return (
-      <div style={{flex:1,minWidth:150,border:`1px solid ${file?"#10B981":"#334155"}`,borderRadius:12,padding:14,background:file?"#10B98111":"#0F172A"}}>
+      <div style={{flex:1,minWidth:140,border:`1px solid ${file?"#10B981":"#334155"}`,borderRadius:12,padding:14,background:file?"#10B98111":"#0F172A"}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
           <span style={{fontSize:16}}>{icon}</span>
-          <span style={{fontWeight:700,fontSize:13,color}}>{label}</span>
+          <span style={{fontWeight:700,fontSize:12,color}}>{label}</span>
         </div>
         {file ? (
           <div>
@@ -59,7 +61,6 @@ export default function UploadPage() {
     );
   };
 
-  // חישוב סטטיסטיקות
   const getStats = () => {
     if (!result) return null;
     const byDay = {};
@@ -71,7 +72,6 @@ export default function UploadPage() {
         if (shift) byDay[d][shift.sheet].push(shift);
       }
     }
-    // סיכומים
     const totals = { אולם:0, כתיבה:0, שער:0 };
     for (const day of Object.values(byDay)) {
       totals["אולם"]  += day["אולם"].length;
@@ -98,21 +98,20 @@ export default function UploadPage() {
       </div>
 
       <div style={{maxWidth:900,margin:"0 auto",padding:"28px 16px"}}>
-
-        {/* העלאה */}
         <div style={{background:"#1E293B",border:"1px solid #334155",borderRadius:18,padding:24,marginBottom:20}}>
           <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>העלה את קבצי האקסל של החודש</div>
           <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
             <FileBox label="אולם" icon="🏛️" color={SHEET_COLOR["אולם"]} file={alon} setFile={setAlon}/>
-            <FileBox label="כתיבה / עריקים" icon="✍️" color={SHEET_COLOR["כתיבה"]} file={erkim} setFile={setErkim}/>
+            <FileBox label="עריקים" icon="✍️" color={SHEET_COLOR["כתיבה"]} file={erkim} setFile={setErkim}/>
+            <FileBox label="משתמטים" icon="📋" color="#F59E0B" file={mishtamtim} setFile={setMishtamtim}/>
             <FileBox label="שער" icon="🚪" color={SHEET_COLOR["שער"]} file={shaar} setFile={setShaar}/>
           </div>
-          <button onClick={upload} disabled={loading||(!alon&&!erkim&&!shaar)} style={{
+          <button onClick={upload} disabled={loading||(!alon&&!erkim&&!mishtamtim&&!shaar)} style={{
             width:"100%",padding:"13px 0",borderRadius:11,border:"none",cursor:"pointer",
             fontFamily:"'Heebo',sans-serif",fontWeight:800,fontSize:15,
             background:"linear-gradient(135deg,#7C3AED,#6366F1)",color:"#fff",
             boxShadow:"0 4px 14px rgba(124,58,237,0.4)",
-            opacity:(loading||(!alon&&!erkim&&!shaar))?0.5:1,
+            opacity:(loading||(!alon&&!erkim&&!mishtamtim&&!shaar))?0.5:1,
           }}>
             {loading?"⏳ מעבד...":"⚡ עבד קבצים"}
           </button>
@@ -126,7 +125,6 @@ export default function UploadPage() {
 
         {result&&stats&&(
           <div>
-            {/* סיכום כללי */}
             <div style={{background:"#1E293B",border:"1px solid #10B981",borderRadius:18,padding:24,marginBottom:16}}>
               <div style={{fontWeight:800,fontSize:16,color:"#10B981",marginBottom:4}}>✅ עובד בהצלחה!</div>
               <div style={{fontSize:13,color:"#64748B",marginBottom:16}}>
@@ -134,7 +132,6 @@ export default function UploadPage() {
                 {" "}({stats.totals["אולם"]} אולם · {stats.totals["כתיבה"]} כתיבה · {stats.totals["שער"]} שער)
               </div>
 
-              {/* פריסה לפי יום */}
               <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>פריסת תורנויות לפי יום:</div>
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
                 {Object.entries(stats.byDay)
@@ -148,7 +145,9 @@ export default function UploadPage() {
                           <div style={{fontWeight:800,fontSize:14,color:"#E2E8F0"}}>יום {day}</div>
                           <div style={{fontSize:11,color:"#475569"}}>
                             {total} תורנויות
-                            {" "}({sheets["אולם"].length} אולם · {sheets["כתיבה"].length} כתיבה · {sheets["שער"].length} שער)
+                            {sheets["אולם"].length>0&&` · ${sheets["אולם"].length} אולם`}
+                            {sheets["כתיבה"].length>0&&` · ${sheets["כתיבה"].length} כתיבה`}
+                            {sheets["שער"].length>0&&` · ${sheets["שער"].length} שער`}
                           </div>
                         </div>
                         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -157,12 +156,8 @@ export default function UploadPage() {
                               <span key={shift.id} style={{
                                 background:shift.bg,color:shift.dark,
                                 borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,
-                                display:"flex",alignItems:"center",gap:4,
                               }}>
                                 {shift.label}
-                                <span style={{fontSize:9,opacity:0.6,background:"#00000022",borderRadius:3,padding:"0 3px"}}>
-                                  {sh==="אולם"?"🏛️":sh==="כתיבה"?"✍️":"🚪"}
-                                </span>
                               </span>
                             ))
                           )}
