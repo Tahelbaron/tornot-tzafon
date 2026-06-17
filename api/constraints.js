@@ -1,5 +1,10 @@
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyR9YwQzMpmC5xz6Pm6p78_UM3dCI9ranVPz1I7k0_kR1SM_ETnNV_4s7LnTImaufzjbw/exec";
+// Vercel API Route — גשר בין האתר לגוגל שיטס
+// רץ על שרתי Vercel, עוקף את בעיית CORS
+
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzaNej_rcfKCjidNzHIvSeTyIpGUTNXtTCpm0Zzy0JPF4FPvKue-tL_vpJWj3lut-ywBA/exec";
+
 export default async function handler(req, res) {
+  // אפשר לכל מקור לגשת (פותר CORS)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
